@@ -1,0 +1,185 @@
+---
+title: "temperature_prediction"
+author: "Daniel Pienica"
+date: "4/2/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#install.packages("automl")
+#install.packages("summarytools")
+#install.packages("dlookr")
+#install.packages("datamaid")
+#install.packages("visdat")
+#install.packages("DataExplorer")
+library(data.table)
+library(DataExplorer)
+library(magrittr)
+
+
+```
+```{r load_data}
+train_data<-fread('project_data/train_data.csv')
+
+```
+## EDA
+
+* Turn relevant features to factorial 
+* prcp looks has a lot of Na's 
+```{r}
+head(train_data[is.na(prcp),,])
+dim(train_data[prcp ==0])
+dim(train_data[is.na(prcp),,])
+```
+
+
+```{r}
+plot_intro(train_data)
+
+```
+Only 7.4% of all the rows are complete!
+Only 4.8% of total missing observations 
+
+```{r}
+plot_missing(train_data)
+```
+We have two columns with a huge lot of missing values
+prcp - 85.9% Amount of precipitation in millimetres (last hour)
+gbrd - 42.05% Solar radiation KJ/m2
+
+There could be a big case to drop prcp. We will have to try to investigate the source of the missing values
+
+```{r}
+options(scipen = 999)
+plot_bar(train_data)
+```
+
+Some categorical values were not explored because of high value of categories, we will have to see if they are really categorical etc.
+```{r}
+library(magrittr)
+train_data[,1:10,] %>% head()
+hist(train_data[,prcp,])
+hist(train_data[,gbrd,])
+```
+*prcp needs to go , most of the values are 0 and NA. drop it 
+*gbrd also has a very high percentage of zeroes. But we will have to be more careful with it.
+```{r}
+train_data <- train_data[,!"prcp"]
+
+```
+```{r}
+par(mfrow = c(4,1))
+plot_histogram(train_data[sample(.N,100000)])
+```
+We can see a couple of interesting things:
+- da has a lot of values around 12
+- dewp is kind of skewed. a lot of values have 0
+- dmax the same
+- gbrd has a lot of 0 values, let's remember that it also had 42% of missing values 
+- temp looks very gaussian except for the 0 values
+- concerning the years most of the vakues are frin 2008 and onward. we migh try to see if there is a link between the 0 and the years
+- hours seem evenly distributed
+- wsid clearly has some outliers
+- stp, smax smin a lot of 0 values
+- There seems to be a lot of zeroes. I need to see if the rows that have zeros in one of the values also have in the others.
+Let's check this fast 
+
+```{r}
+plot_histogram(train_data[hmdy == 0][sample(.N,100000)])
+```
+Ok wow, great news. We can see that all the zero values seem to be correlated
+it shows that from the 100000 rows we selected with hmin is 0 , we have a high number of zeros for the following columns
+dewp,gust,wdsp, hmin ., dewp, stp
+
+I will plot correlations once with the zeroes and once without
+```{r}
+plot_correlation(na.omit(train_data[sample(.N,100000)]))
+```
+temp is our y- value
+* it has some pretty negative correlation with elvt (which makes sense)
+* pretty strong cortrelation with hmdy,hmin,hmax, dewp,dmax,dmin - this is explained because of the zeroes ( see below)
+
+```{r}
+plot_correlation(na.omit(train_data[hmdy!=0 | gust!=0  | wdsp !=0][sample(.N,100000)]))
+```
+
+Without the zeros it all changes...
+
+negative correlation with hmdy, hmin and hmax (makes sense)
+
+```{r}
+plot_correlation(na.omit(train_data[hmdy==0 ][sample(.N,100000)]))
+```
+
+```{r}
+plot_prcomp(na.omit(train_data[,!"gbrd"][sample(.N,100000)]),ncol = 2,nrow =1)
+
+```
+
+* temp has some missing values - check and remove them
+* check if dupicate values - no duplicates
+```{r}
+plot_boxplot(train_data[hmdy!=0 | gust !=0][sample(.N,100000)],by= "temp")
+
+```
+wsid    wsnm    elvt     lat     lon    inme    city    prov    mdct    date      yr      mo      da      hr    prcp     stp 
+    105     105      99     104     104     104     102       4  140916    5974      17      12      31      24     347    2324 
+   smax    smin    gbrd    temp    dewp    dmax    dmin    hmdy    hmax    hmin    wdsp    wdct    gust 
+   2324    2323 1912249     460     463     491     436      92     102     102     182     361     335 
+
+```{r}
+plot_scatterplot(train_data[hmdy!=0 | gust !=0][sample(.N,10000)],by= "temp",nrow=2, ncol=1)
+
+```
+
+
+
+
+
+
+```{r }
+class(train_data)
+head(train_data)
+train_data[,city,] %>% table
+```
+
+
+```{r eda}
+summary(train_data)
+str(train_data)
+
+```
+```{r}
+train_data[,temp,]%>% hist()
+train_data[,dewp,]%>% hist()
+head(train_data[dewp<0,,])
+```
+The distribution lookes gaussian
+Interesting.
+We can see some negative values though
+### remove columns with too much NA's
+
+
+
+```{r }
+
+#options(scipen=999)
+#dim(train_data)
+#calc_na_percentage <- function(col) sum(is.na(col))/length(col)
+#NaPercentageByColumn<-t(train_data[,lapply(.SD,calc_na_percentage),.SD = names(train_data)])
+#NaPercentageByColumn
+
+#library(ggplot2)
+#install.packages("GGally")
+#library(GGally)
+#ggcorr(train_data, label = TRUE, label_alpha = TRUE)
+
+```
+
+```{r}
+#par(mar = rep(2,4))
+#ggpairs(train_data)
+```
