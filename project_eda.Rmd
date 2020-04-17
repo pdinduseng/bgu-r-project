@@ -22,7 +22,8 @@ library(magrittr)
 
 ```
 ```{r load_data}
-train_data<-fread('project_data/train_data.csv')
+train_data<-fread('train_data.csv')
+test_data <-fread('test_for_prediction.csv')
 
 ```
 ## EDA
@@ -37,6 +38,7 @@ dim(train_data[is.na(prcp),,])
 
 
 ```{r}
+print(t(introduce(train_data)))
 plot_intro(train_data)
 
 ```
@@ -58,16 +60,54 @@ plot_bar(train_data)
 ```
 
 Some categorical values were not explored because of high value of categories, we will have to see if they are really categorical etc.
+
 ```{r}
 library(magrittr)
 train_data[,1:10,] %>% head()
 hist(train_data[,prcp,])
 hist(train_data[,gbrd,])
+
 ```
 *prcp needs to go , most of the values are 0 and NA. drop it 
 *gbrd also has a very high percentage of zeroes. But we will have to be more careful with it.
+Let's analyze it
+Let's see correlations with na and without na for grbd
+We also saw positive correlation with temp and gbrd.
+
+```{r}
+plot_correlation(na.omit(train_data[,,]),type ="c")
+plot_correlation(na.omit(train_data[,!"gbrd"]),type="c")
+print(dim(na.omit(train_data[,!"gbrd"])))
+print(dim(na.omit(train_data)))
+```
+*we have very high correlations between all the min max values.
+*very negative correlation with humidity, positive correlation with gbrd
+*gbrd is also negatively correlated with humidity (makes sense)
+*What is also intersting is that the correlation is stable,
+meaning even when I remove all the rows containing na's (gbrd 40%) 
+the correlations remain the same
+Let's try to assess if gbrd is present in the test data
+
+Depending on which model I use I'll have to drop gbrd.
+For Random Forest for instance I won't need to drop it.
+
+
+Maybe the missing gbrd are city specific?
+```{r}
+plot_missing(test_data)
+```
+
+
+```{r}
+head(train_data[,c(smax,smin,stp),])
+```
+
+
+### continuous data
+
 ```{r}
 train_data <- train_data[,!"prcp"]
+train_data <- train_data[,temp!=0,]
 
 ```
 ```{r}
@@ -88,11 +128,35 @@ We can see a couple of interesting things:
 Let's check this fast 
 
 ```{r}
-plot_histogram(train_data[hmdy == 0][sample(.N,100000)])
+plot_histogram(train_data)
+
 ```
+
+We'll remove the rows with temp equal to zero as it seems that all the metrics not related to geography are 0.
+
+Maybe they had a measuring problem
+
+```{r}
+train_data<-train_data[temp!=0,,]
+options(scipen=999)
+plot_missing(train_data)
+```
+
 Ok wow, great news. We can see that all the zero values seem to be correlated
 it shows that from the 100000 rows we selected with hmin is 0 , we have a high number of zeros for the following columns
 dewp,gust,wdsp, hmin ., dewp, stp
+```{r}
+
+
+count<-function(x) length(x)
+train_data[,lapply(.SD,length),number_of_zeroes]
+```
+Let's see how a row with 14 zeroes looks like 
+
+```{r}
+head(train_data[hmdy == 0])
+```
+
 
 I will plot correlations once with the zeroes and once without
 ```{r}
@@ -162,6 +226,20 @@ Interesting.
 We can see some negative values though
 ### remove columns with too much NA's
 
+
+## comparison of two datasets using visdat package
+
+```{r}
+
+names(test_data)[!(names(test_data) %in% names(train_data))]
+names(train_data)[!(names(train_data) %in% names(test_data))]
+#install.packages("visdat")
+library(visdat)
+#dt[, setdiff(names(dt), c("b", "c")), with = FALSE]
+#dim(test_data)[1]
+visdat::vis_compare(train_data[,!"temp"][sample(.N,1000)]
+                    ,test_data[,!"prcp"][,!"id"][sample(.N,1000)])
+```
 
 
 ```{r }
